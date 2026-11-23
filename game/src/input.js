@@ -1,16 +1,24 @@
-// Ember Duel — keyboard input. Number keys play the matching hand card,
-// Enter or Space ends the turn, R starts a fresh duel from any screen.
+// Input: click a card to play it, keys 1–7 do the same, Enter ends the turn
+// (or starts the duel from the title), R restarts.
+import { playCard, endTurn, restart, startGame } from './game.js';
 
-export function bindKeyboard(handlers) {
-  document.addEventListener('keydown', (event) => {
-    if (event.key >= '1' && event.key <= '7') {
-      const index = Number(event.key) - 1;
-      handlers.onPlayCard(index);
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      const endButton = document.getElementById('end-turn');
-      if (endButton && !endButton.disabled) handlers.onEndTurn();
-    } else if (event.key === 'r' || event.key === 'R') {
-      handlers.onAgain();
+export function bindInput(state) {
+  document.getElementById('you-hand').addEventListener('click', (e) => {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    playCard(state, Number(card.dataset.index));
+  });
+  document.getElementById('end-turn').addEventListener('click', () => endTurn(state));
+  document.getElementById('start-btn').addEventListener('click', () => startGame(state));
+  document.querySelectorAll('.restart-btn').forEach((b) => b.addEventListener('click', () => restart(state)));
+  document.addEventListener('keydown', (e) => {
+    if (e.key >= '1' && e.key <= '7') {
+      playCard(state, Number(e.key) - 1);
+    } else if (e.key === 'Enter') {
+      if (state.phase === 'title') startGame(state);
+      else endTurn(state);
+    } else if (e.key === 'r' || e.key === 'R') {
+      if (state.phase !== 'title') restart(state);
     }
   });
 }

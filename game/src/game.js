@@ -1,169 +1,110 @@
-// Ember Duel — the game state machine: turns, energy, card effects,
-// shield, and the win/loss conditions. Pure logic; rendering lives in
-// render.js and the opponent's choices live in ai.js.
+// The rules engine: playing a card, the combo, ending the turn, winning and
+// losing. Every mutation ends in a render, so the table always shows the state.
+import { CARDS } from './cards.js';
+import { dealDamage, heal, newGame, startTurn } from './state.js';
+import { noteElementPlayed } from './combo.js';
+import { drawCards } from './deck.js';
+import { cinderPlay } from './ai.js';
+import { sfx } from './sound.js';
+import { render } from './render.js';
 
-import { buildDeck, drawCards, shuffle } from './deck.js';
-import { cardById } from './cards.js';
-import { rngFromSeed } from './random.js';
-
-export const MAX_LIFE = 20;
-export const START_ENERGY = 3;
-export const MAX_ENERGY = 6;
-export const HAND_LIMIT = 7;
-
-export function createSide(name, rng) {
-  const deck = shuffle(buildDeck(), rng);
-  const side = {
-    name,
-    life: MAX_LIFE,
-    maxLife: MAX_LIFE,
-    shield: 0,
-    energy: START_ENERGY,
-    maxEnergy: START_ENERGY,
-    drain: 0,
-    hand: [],
-    deck,
-    discard: [],
-  };
-  drawCards(side.deck, side.discard, side.hand, 4, rng);
-  return side;
-}
-
-export function createGame(seedText) {
-  const rng = rngFromSeed(seedText);
-  const state = {
-    seed: seedText,
-    rng,
-    phase: 'title',
-    turn: 1,
-    player: createSide('You', rng),
-    ai: createSide('Cinder', rng),
-    log: ['The duel begins. Cinder shuffles the embers.'],
-    winner: null,
-  };
-  return state;
-}
-
-export function startDuel(state) {
+export function startGame(state) {
   state.phase = 'play';
-  beginTurn(state, state.player);
-  logLine(state, 'Your turn — play a card, then End Turn.');
+  state.log.push('Your move — click a card to play it.');
+  sfx.turn();
+  render(state);
 }
 
-export function beginTurn(state, side) {
-  const isPlayer = side === state.player;
-  const turnNumber = isPlayer ? state.turn : state.turn;
-  side.maxEnergy = Math.min(START_ENERGY + (state.turn - 1), MAX_ENERGY);
-  side.energy = Math.max(0, side.maxEnergy - side.drain);
-  side.drain = 0;
-  const drawn = drawCards(side.deck, side.discard, side.hand, 1, state.rng);
-  if (drawn === 0) logLine(state, `${side.name} has no cards left to draw.`);
-  return turnNumber;
-}
-
-export function canPlay(state, side, index) {
-  const active = state.phase === 'play' ? state.player : state.phase === 'ai' ? state.ai : null;
-  if (active === null) return { ok: false, reason: 'not playing' };
-  if (side !== active) return { ok: false, reason: 'not your turn' };
-  const id = side.hand[index];
-  if (id === undefined) return { ok: false, reason: 'no such card' };
-  const card = cardById(id);
-  if (card.cost > side.energy) return { ok: false, reason: 'not enough energy' };
-  return { ok: true, card };
-}
-
-// Play the card at `index` from `side`'s hand against the other side.
-// Returns { ok, reason }.
-export function playCard(state, side, index) {
-  const check = canPlay(state, side, index);
-  if (!check.ok) return check;
-  const other = side === state.player ? state.ai : state.player;
-  const card = check.card;
+export function applyCard(state, who, handIndex) {
+  const side = state[who];
+  const foe = state[who === 'you' ? 'cinder' : 'you'];
+  const id = side.hand[handIndex];
+  const card = CARDS[id];
+  if (!card || card.cost > side.energy) return false;
+  side.hand.splice(handIndex, 1);
+  side.discard.push(id);
   side.energy -= card.cost;
-  side.hand.splice(index, 1);
-  side.discard.push(card.id);
-  applyEffect(state, side, other, card);
+  const whoName = who === 'you' ? 'You' : 'Cinder';
+  if (card.damage) {
+    const r = dealDamage(foe, card.damage);
+    state.log.push(`${whoName} play ${card.name}: ${r.dealt} damage${r.absorbed ? ` (${r.absorbed} absorbed by shield)` : ''}.`);
+  }
+  if (card.shield) {
+    side.shield += card.shield;
+    state.log.push(`${whoName} gain ${card.shield} shield.`);
+  }
+  if (card.heal) {
+    heal(side, card.heal);
+    state.log.push(`${whoName} heal ${card.heal} life.`);
+  }
+  if (card.draw) {
+    drawCards(state.rng, side, card.draw);
+    state.log.push(`${whoName} draw a card.`);
+  }
+  if (who === 'you') {
+    state.played.push(id);
+  }
+  // The combo is open to both sides: two cards of one element in a turn, and
+  // the second one lands with +2 bonus damage under the COMBO x2 banner.
+  const combo = noteElementPlayed(state, card.element);
+  if (combo) {
+    const r = dealDamage(foe, combo.bonus);
+    state.log.push(`COMBO x2! Two ${card.element} cards — +${combo.bonus} bonus damage!`);
+    if (who === 'you') sfx.combo();
+  } else if (who === 'you') {
+    sfx.play();
+  }
   checkEnd(state);
-  return { ok: true, card };
+  return true;
 }
 
-export function applyEffect(state, actor, target, card) {
-  const effect = card.effect;
-  if (effect.kind === 'damage') {
-    dealDamage(state, target, effect.amount);
-    logLine(state, `${actor.name} plays ${card.name} — ${effect.amount} damage to ${target.name}.`);
-  } else if (effect.kind === 'shield') {
-    actor.shield += effect.amount;
-    logLine(state, `${actor.name} plays ${card.name} — gains ${effect.amount} shield.`);
-  } else if (effect.kind === 'heal') {
-    const healed = Math.min(effect.amount, actor.maxLife - actor.life);
-    actor.life += healed;
-    logLine(state, `${actor.name} plays ${card.name} — restores ${healed} life.`);
-  } else if (effect.kind === 'draw') {
-    const drawn = drawCards(actor.deck, actor.discard, actor.hand, effect.amount, state.rng);
-    logLine(state, `${actor.name} plays ${card.name} — draws ${drawn}.`);
-  }
-  if (effect.draw) {
-    const drawn = drawCards(actor.deck, actor.discard, actor.hand, effect.draw, state.rng);
-    logLine(state, `${actor.name} draws ${drawn} more.`);
-  }
-  if (effect.drain) {
-    target.drain += effect.drain;
-    logLine(state, `${target.name} loses ${effect.drain} energy next turn.`);
-  }
+export function playCard(state, handIndex) {
+  if (state.phase !== 'play') return;
+  if (applyCard(state, 'you', handIndex)) render(state);
 }
 
-export function dealDamage(state, target, amount) {
-  let left = amount;
-  if (target.shield > 0) {
-    const absorbed = Math.min(target.shield, left);
-    target.shield -= absorbed;
-    left -= absorbed;
+export function endTurn(state) {
+  if (state.phase !== 'play' || state.busy) return;
+  state.busy = true;
+  // Cinder's turn starts fresh: its own combo window, its own played cards.
+  state.elementsPlayed = [];
+  state.combo = null;
+  state.played = [];
+  state.log.push('Cinder takes its turn…');
+  const step = () => {
+    cinderPlay(state, applyCard);
+    if (state.phase === 'play') {
+      startTurn(state);
+      state.log.push('Your turn.');
+      sfx.turn();
+    }
+    state.busy = false;
+    render(state);
+  };
+  if (state.instant) {
+    step();
+  } else {
+    render(state);
+    setTimeout(step, 650);
   }
-  target.life = Math.max(0, target.life - left);
 }
 
 export function checkEnd(state) {
-  if (state.ai.life <= 0) {
-    state.phase = 'won';
-    state.winner = 'player';
-    logLine(state, 'Cinder falls. Victory is yours.');
-  } else if (state.player.life <= 0) {
-    state.phase = 'lost';
-    state.winner = 'ai';
-    logLine(state, 'Your embers fade. Cinder wins the duel.');
+  if (state.cinder.life <= 0) {
+    state.phase = 'win';
+    state.log.push('Cinder falls — the last ember is yours!');
+    sfx.win();
+  } else if (state.you.life <= 0) {
+    state.phase = 'loss';
+    state.log.push('Your ember fades.');
+    sfx.loss();
   }
 }
 
-// End the player's turn: the AI plays, then a fresh player turn begins.
-export function endTurn(state, chooseCard) {
-  if (state.phase !== 'play') return;
-  state.phase = 'ai';
-  logLine(state, "Cinder's turn.");
-  runAiTurn(state, chooseCard);
-  if (state.phase === 'ai') {
-    state.phase = 'play';
-    state.turn += 1;
-    beginTurn(state, state.player);
-    logLine(state, `Turn ${state.turn} — your turn.`);
-  }
-}
-
-export function runAiTurn(state, chooseCard) {
-  beginTurn(state, state.ai);
-  let guard = 0;
-  while (state.phase === 'ai' && guard < 12) {
-    guard++;
-    const index = chooseCard(state, state.ai);
-    if (index === null || index === undefined) break;
-    const result = playCard(state, state.ai, index);
-    if (!result.ok) break;
-    if (state.phase !== 'ai') return;
-  }
-  if (state.phase === 'ai') logLine(state, 'Cinder ends its turn.');
-}
-
-export function logLine(state, text) {
-  state.log.push(text);
-  if (state.log.length > 6) state.log.splice(0, state.log.length - 6);
+export function restart(state) {
+  const fresh = newGame(state.seed);
+  Object.assign(state, fresh);
+  state.phase = 'play';
+  state.log.push('A new duel. Your move.');
+  render(state);
 }

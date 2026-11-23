@@ -1,46 +1,34 @@
-// Ember Duel — Cinder's brain. A readable heuristic, so its choices can
-// be read and countered: it finishes a low-life foe, guards when hurt,
-// heals when badly wounded, and otherwise spends its energy on damage.
+// Cinder, the opponent: a greedy player you can read and counter. It heals
+// when hurt, guards when your hand is full of damage, and otherwise spends its
+// energy on the hardest hit it can afford.
+import { CARDS } from './cards.js';
 
-import { cardById } from './cards.js';
-
-export function scoreCard(state, ai, card) {
-  const foe = state.player;
+function scoreCard(card, me, foe) {
   let score = 0;
-  if (card.effect.kind === 'damage') {
-    score = card.effect.amount * 2;
-    if (foe.life <= card.effect.amount) score += 50;
-    if (foe.life <= 6) score += 6;
-  } else if (card.effect.kind === 'shield') {
-    score = card.effect.amount;
-    if (ai.life <= 8) score += 10;
-    if (ai.shield >= 8) score -= 8;
-  } else if (card.effect.kind === 'heal') {
-    score = ai.life < ai.maxLife ? card.effect.amount * 2 : -10;
-    if (ai.life <= 6) score += 12;
-  } else if (card.effect.kind === 'draw') {
-    score = ai.hand.length >= 6 ? -6 : 5;
-  }
-  if (card.effect.draw) score += 3;
-  if (card.effect.drain) score += 3;
-  // Prefer the most damage per energy; break ties toward cheaper cards.
-  score += card.effect.amount / card.cost;
+  if (card.damage) score += card.damage * 2;
+  if (card.shield) score += me.life < 12 ? card.shield * 1.5 : card.shield * 0.5;
+  if (card.heal) score += me.life <= 10 ? card.heal * 3 : card.heal * 0.5;
+  if (card.draw) score += 1.5;
+  if (foe.life <= 6 && card.damage) score += 4;
+  score -= card.cost * 0.5;
   return score;
 }
 
-// Pick the index of the best card Cinder can afford, or null to pass.
-export function chooseCard(state, ai) {
-  let bestIndex = null;
-  let bestScore = -Infinity;
-  ai.hand.forEach((id, index) => {
-    const card = cardById(id);
-    if (card.cost > ai.energy) return;
-    const score = scoreCard(state, ai, card);
-    if (score > bestScore) {
-      bestScore = score;
-      bestIndex = index;
+export function cinderPlay(state, applyCard) {
+  const me = state.cinder;
+  let guard = 0;
+  while (guard++ < 12) {
+    const playable = me.hand
+      .map((id, i) => ({ id, i, card: CARDS[id] }))
+      .filter((c) => c.card.cost <= me.energy);
+    if (playable.length === 0) break;
+    let best = null;
+    let bestScore = -Infinity;
+    for (const c of playable) {
+      const s = scoreCard(c.card, me, state.you);
+      if (s > bestScore) { bestScore = s; best = c; }
     }
-  });
-  // Never spend the last energy on a draw when the hand is already full.
-  return bestScore > 0 ? bestIndex : null;
+    if (!best || bestScore < 0.5) break;
+    applyCard(state, 'cinder', best.i);
+  }
 }

@@ -4,7 +4,9 @@
 // hands it in. It copies game/ and screenshots/ from beside this file to /output and writes
 // /output/dossier.json, the summary the judge reads, with the vendored make.fun library.
 // The game: a two-player card battler against Cinder — 8 card types, energy, shield, and
-// a hand you play by clicking. Put your 3 or 4 PNG or JPEG screenshots in screenshots/
+// a hand you play by clicking. v2 adds the combo: two cards of one element in a turn deal
+// +2 bonus damage under a COMBO x2 banner, and the play screenshot catches it mid-combo.
+// Put your 3 or 4 PNG or JPEG screenshots in screenshots/
 // (the first by name is the cover) and run it.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.

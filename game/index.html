@@ -1,63 +1,79 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<title>Ember Duel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ember Duel — a card battler</title>
-<link rel="stylesheet" href="./src/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13'>▲</text></svg>">
+<link rel="stylesheet" href="src/style.css">
 </head>
 <body>
-<div id="app">
-  <div id="title-screen">
-    <div class="title-glyphs">▲&nbsp;◆&nbsp;★&nbsp;●</div>
-    <h1>EMBER DUEL</h1>
-    <p class="tagline">A card battler against Cinder, keeper of the last flame.</p>
-    <div class="howto">
-      <p><b>How to play:</b> each turn you gain energy and draw a card. Click a card to play it — its cost comes out of your energy. Reduce Cinder to <b>0 life</b> to win. Shield absorbs damage first.</p>
-      <p class="howto-cards">▲ Ember burns &nbsp;·&nbsp; ◆ Frost guards &nbsp;·&nbsp; ★ Spark draws &nbsp;·&nbsp; ● Bloom heals</p>
+<div id="table">
+  <div id="cinder-row" class="side-row">
+    <div class="portrait" id="cinder-portrait">🔥</div>
+    <div class="side-info">
+      <div class="side-name">Cinder, keeper of the last flame</div>
+      <div class="meters">
+        <span class="meter life">❤ <b id="cinder-life">20</b></span>
+        <span class="meter shield">🛡 <b id="cinder-shield">0</b></span>
+        <span class="meter energy">⚡ <b id="cinder-energy">3</b></span>
+      </div>
     </div>
-    <button id="play-button">▶&nbsp; PLAY</button>
-    <p class="keys">Click a card to play it &nbsp;·&nbsp; keys 1–7 play &nbsp;·&nbsp; Enter ends the turn &nbsp;·&nbsp; R restarts</p>
+    <div id="cinder-hand" class="hand backs"></div>
   </div>
 
-  <div id="table" class="hidden">
-    <div class="side side-ai">
-      <div class="side-info">
-        <span class="side-name">CINDER</span>
-        <span id="ai-life" class="life"></span>
-        <span id="ai-shield" class="shield"></span>
-        <span id="ai-energy" class="energy"></span>
-        <span id="ai-deck" class="deck-count"></span>
-      </div>
-      <div id="ai-hand" class="hand hand-ai"></div>
+  <div id="middle">
+    <div id="played-col">
+      <div class="col-label">Played this turn</div>
+      <div id="played"></div>
     </div>
-
-    <div id="center">
-      <div id="turn-label"></div>
+    <div id="centre-col">
+      <div id="combo-banner" class="hidden">COMBO x2 <span id="combo-detail">+2 bonus damage!</span></div>
+      <div id="turn-label">Turn 1</div>
       <div id="log"></div>
-      <button id="end-turn">END TURN ⏎</button>
     </div>
-
-    <div class="side side-player">
-      <div class="side-info">
-        <span class="side-name">YOU</span>
-        <span id="player-life" class="life"></span>
-        <span id="player-shield" class="shield"></span>
-        <span id="player-energy" class="energy"></span>
-        <span id="player-deck" class="deck-count"></span>
-      </div>
-      <div id="player-hand" class="hand hand-player"></div>
+    <div id="deck-col">
+      <div class="col-label">Your deck</div>
+      <div id="deck-count" class="deck-pile">24</div>
     </div>
   </div>
 
-  <div id="end-screen" class="hidden">
-    <div class="end-panel">
-      <h2 id="end-title"></h2>
-      <p id="end-detail"></p>
-      <button id="play-again">PLAY AGAIN (R)</button>
+  <div id="you-row" class="side-row">
+    <div class="portrait" id="you-portrait">🧑‍🚀</div>
+    <div class="side-info">
+      <div class="side-name">You, the challenger</div>
+      <div class="meters">
+        <span class="meter life">❤ <b id="you-life">20</b></span>
+        <span class="meter shield">🛡 <b id="you-shield">0</b></span>
+        <span class="meter energy">⚡ <b id="you-energy">3</b>/<b id="you-energy-max">3</b></span>
+      </div>
+      <button id="end-turn">End turn ⏎</button>
     </div>
+    <div id="you-hand" class="hand"></div>
   </div>
 </div>
-<script type="module" src="./src/main.js"></script>
+
+<div id="title-overlay" class="overlay">
+  <h1>EMBER DUEL</h1>
+  <p class="tagline">A card battler against Cinder, keeper of the last flame.</p>
+  <p class="rules-line">8 card types · energy grows 3 → 6 · shield absorbs damage ·<br>play two cards of the same element in one turn for a <b>COMBO x2 +2 damage</b></p>
+  <p class="cta">Click a card to play it · keys 1–7 · Enter ends the turn · R restarts</p>
+  <button id="start-btn">▶ Start the duel</button>
+</div>
+
+<div id="win-overlay" class="overlay hidden">
+  <h1>VICTORY</h1>
+  <p class="tagline">Cinder's flame is out — the last ember is yours.</p>
+  <button class="restart-btn">↻ Play again (R)</button>
+</div>
+
+<div id="loss-overlay" class="overlay hidden">
+  <h1>DEFEAT</h1>
+  <p class="tagline">Your ember fades. Cinder keeps the last flame… this time.</p>
+  <button class="restart-btn">↻ Try again (R)</button>
+</div>
+
+<div id="test-result"></div>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

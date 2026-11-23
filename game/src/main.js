@@ -1,58 +1,26 @@
-// Ember Duel — bootstrap. Reads the URL, builds the state, wires the
-// handlers, and renders. ?shot= shows a fixed state for screenshots;
-// ?test=N plays N full games headlessly and reports the results.
-
-import { createGame, startDuel, playCard, endTurn } from './game.js';
-import { chooseCard } from './ai.js';
+// Ember Duel boots here: a fresh game from the seed, the fixed screenshot
+// state when ?shot= is given, the input bindings, and the headless self-play
+// tally when ?test=N is given.
+import { newGame } from './state.js';
 import { render } from './render.js';
-import { bindKeyboard } from './input.js';
-import { stateForShot, runTests } from './shots.js';
+import { bindInput } from './input.js';
+import { applyShot, selfPlay } from './shots.js';
 
-const params = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(location.search);
+const seed = Number(params.get('seed') || 1234);
+const state = newGame(seed);
+
 const shot = params.get('shot');
-const seed = params.get('seed') || 'ember-duel';
+if (shot) applyShot(state, shot);
 
-let state = shot && shot !== 'start' ? stateForShot(shot, seed) : createGame(seed);
-if (shot === 'start') state.phase = 'title';
+render(state);
+bindInput(state);
 
-const handlers = {
-  onPlayCard(index) {
-    if (state.phase !== 'play') return;
-    const result = playCard(state, state.player, index);
-    if (result.ok) render(state, handlers);
-  },
-  onEndTurn() {
-    if (state.phase !== 'play') return;
-    endTurn(state, chooseCard);
-    render(state, handlers);
-  },
-  onAgain() {
-    state = createGame(seed);
-    startDuel(state);
-    render(state, handlers);
-  },
-};
-
-document.getElementById('play-button').addEventListener('click', () => {
-  startDuel(state);
-  render(state, handlers);
-});
-
-bindKeyboard(handlers);
-render(state, handlers);
-
-// Headless self-play test: report into the page for --dump-dom checks.
-if (params.get('test')) {
-  const count = Number(params.get('test')) || 10;
-  const results = runTests(count);
-  const node = document.createElement('div');
-  node.id = 'test-result';
-  node.textContent = JSON.stringify(results);
-  document.body.appendChild(node);
-  document.title = results.errors.length === 0 && results.unfinished === 0
-    ? 'TESTS PASS'
-    : 'TESTS FAIL';
+const test = params.get('test');
+if (test) {
+  const result = selfPlay(Number(test), seed);
+  const text = `self-play: W ${result.wins} / L ${result.losses} / D ${result.draws} over ${test} games`;
+  document.getElementById('test-result').textContent = text;
+  document.title = text;
+  console.log(text);
 }
-
-// Exposed for debugging in the browser console only.
-window.__ember = { get state() { return state; }, playCard, endTurn, chooseCard };

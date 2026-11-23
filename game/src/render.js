@@ -1,125 +1,82 @@
-// Ember Duel — rendering. Builds the table, the hands, the life totals,
-// the energy pips and the log from the game state, and re-renders after
-// every move. Cards are real DOM elements so they can slide, flip and
-// snap with CSS transitions.
+// The table: every render rebuilds the hands, the played cards, the combo
+// banner, the meters and the log from the state, so the screen never drifts.
+import { ELEMENTS, CARDS } from './cards.js';
+import { energyForTurn } from './state.js';
 
-import { ELEMENTS, cardById } from './cards.js';
+const $ = (id) => document.getElementById(id);
 
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
+function valueLine(card) {
+  const parts = [];
+  if (card.damage) parts.push(`⚔ ${card.damage}`);
+  if (card.shield) parts.push(`🛡 ${card.shield}`);
+  if (card.heal) parts.push(`❤ ${card.heal}`);
+  if (card.draw) parts.push(`+${card.draw} card`);
+  return parts.join(' · ');
 }
 
-export function cardElement(card, opts) {
-  const element = ELEMENTS[card.element];
-  const node = el('div', 'card' + (opts && opts.faceDown ? ' card-back' : ''));
-  node.style.setProperty('--element', element.color);
-  node.style.setProperty('--glow', element.glow);
-  if (opts && opts.faceDown) {
-    node.appendChild(el('div', 'card-glyph', '▲'));
-    node.appendChild(el('div', 'card-name', 'EMBER'));
-    return node;
-  }
-  const cost = el('div', 'card-cost', String(card.cost));
-  cost.title = 'Energy cost';
-  node.appendChild(cost);
-  node.appendChild(el('div', 'card-glyph', element.glyph));
-  node.appendChild(el('div', 'card-value', String(card.value)));
-  node.appendChild(el('div', 'card-name', card.name.toUpperCase()));
-  node.appendChild(el('div', 'card-text', card.text));
-  if (opts && opts.playable === false) node.classList.add('unplayable');
-  if (opts && opts.index !== undefined) node.dataset.index = String(opts.index);
-  return node;
+function cardEl(id, opts = {}) {
+  const card = CARDS[id];
+  const el = ELEMENTS[card.element];
+  const div = document.createElement('div');
+  div.className = 'card' + (opts.mini ? ' mini' : '') + (opts.playable ? ' playable' : '') + (opts.cant ? ' cant' : '');
+  div.style.borderTop = `6px solid ${el.colour}`;
+  if (opts.index !== undefined) div.dataset.index = opts.index;
+  div.innerHTML =
+    `<div class="cost">${card.cost}</div>` +
+    `<div class="shape" style="color:${el.colour}">${el.shape}</div>` +
+    `<div class="cname">${card.name}</div>` +
+    `<div class="ctext">${card.text}</div>` +
+    `<div class="value">${valueLine(card)}</div>`;
+  return div;
 }
 
-export function renderTitle(state) {
-  const title = document.getElementById('title-screen');
-  const table = document.getElementById('table');
-  const end = document.getElementById('end-screen');
-  title.classList.remove('hidden');
-  table.classList.add('hidden');
-  end.classList.add('hidden');
+function backEl() {
+  const div = document.createElement('div');
+  div.className = 'card mini back';
+  div.innerHTML = '<div class="shape">🔥</div><div class="cname">Cinder</div>';
+  return div;
 }
 
-export function renderTable(state, onPlayCard, onEndTurn) {
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('end-screen').classList.add('hidden');
-  const table = document.getElementById('table');
-  table.classList.remove('hidden');
+export function render(state) {
+  $('cinder-life').textContent = state.cinder.life;
+  $('cinder-shield').textContent = state.cinder.shield;
+  $('cinder-energy').textContent = state.cinder.energy;
+  $('you-life').textContent = state.you.life;
+  $('you-shield').textContent = state.you.shield;
+  $('you-energy').textContent = state.you.energy;
+  $('you-energy-max').textContent = energyForTurn(state.turn);
+  $('turn-label').textContent = `Turn ${state.turn} — energy ${energyForTurn(state.turn)}`;
+  $('deck-count').textContent = state.you.deck.length;
 
-  renderSide(state, state.ai, 'ai', false);
-  renderSide(state, state.player, 'player', true, onPlayCard);
-  renderLog(state);
-  renderCenter(state, onEndTurn);
-}
+  const cinderHand = $('cinder-hand');
+  cinderHand.innerHTML = '';
+  for (const _id of state.cinder.hand) cinderHand.appendChild(backEl());
 
-function renderSide(state, side, who, faceUp, onPlayCard) {
-  const life = document.getElementById(`${who}-life`);
-  life.textContent = `♥ ${side.life}`;
-  const shield = document.getElementById(`${who}-shield`);
-  shield.textContent = side.shield > 0 ? `🛡 ${side.shield}` : '';
-  shield.classList.toggle('hidden', side.shield <= 0);
-  const energy = document.getElementById(`${who}-energy`);
-  energy.textContent = '';
-  for (let i = 0; i < side.maxEnergy; i++) {
-    const pip = el('span', 'pip' + (i < side.energy ? ' pip-full' : ' pip-empty'));
-    pip.textContent = '●';
-    energy.appendChild(pip);
-  }
-  const hand = document.getElementById(`${who}-hand`);
-  hand.textContent = '';
-  side.hand.forEach((id, index) => {
-    const card = cardById(id);
-    const playable = faceUp && state.phase === 'play' && card.cost <= side.energy;
-    const node = cardElement(card, { faceDown: !faceUp, playable, index });
-    if (faceUp) {
-      node.addEventListener('click', () => onPlayCard(index));
-      node.tabIndex = 0;
-      node.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') onPlayCard(index);
-      });
-    }
-    hand.appendChild(node);
+  const youHand = $('you-hand');
+  youHand.innerHTML = '';
+  state.you.hand.forEach((id, i) => {
+    const card = CARDS[id];
+    const playable = state.phase === 'play' && card.cost <= state.you.energy;
+    youHand.appendChild(cardEl(id, { index: i, playable, cant: state.phase === 'play' && !playable }));
   });
-  const count = document.getElementById(`${who}-deck`);
-  count.textContent = `Deck ${side.deck.length} · Discard ${side.discard.length}`;
-}
 
-function renderCenter(state, onEndTurn) {
-  const turn = document.getElementById('turn-label');
-  turn.textContent = state.phase === 'ai' ? "Cinder's turn…" : `Turn ${state.turn} — your move`;
-  const endButton = document.getElementById('end-turn');
-  endButton.disabled = state.phase !== 'play';
-  endButton.onclick = onEndTurn;
-}
+  const played = $('played');
+  played.innerHTML = '';
+  for (const id of state.played.slice(-3)) played.appendChild(cardEl(id, { mini: true }));
+  if (state.played.length === 0) played.innerHTML = '<div class="col-label">— none yet —</div>';
 
-function renderLog(state) {
-  const log = document.getElementById('log');
-  log.textContent = '';
-  state.log.forEach((line) => log.appendChild(el('div', 'log-line', line)));
-}
+  const banner = $('combo-banner');
+  if (state.combo) {
+    const el = ELEMENTS[state.combo.element];
+    banner.classList.remove('hidden');
+    $('combo-detail').textContent = `${el.shape} ${el.name} — +${state.combo.bonus} bonus damage!`;
+  } else {
+    banner.classList.add('hidden');
+  }
 
-export function renderEnd(state, onAgain) {
-  document.getElementById('title-screen').classList.add('hidden');
-  document.getElementById('table').classList.remove('hidden');
-  const end = document.getElementById('end-screen');
-  end.classList.remove('hidden');
-  const won = state.phase === 'won';
-  end.classList.toggle('win', won);
-  end.classList.toggle('loss', !won);
-  document.getElementById('end-title').textContent = won ? '★ VICTORY ★' : 'DEFEAT';
-  document.getElementById('end-detail').textContent = won
-    ? `Cinder's embers are out in ${state.turn} turns. Your life: ${state.player.life} · Cinder's life: 0.`
-    : `Cinder wins in ${state.turn} turns. Your life: 0 · Cinder's life: ${state.ai.life}.`;
-  document.getElementById('play-again').onclick = onAgain;
-}
+  $('log').innerHTML = state.log.slice(-4).map((l) => `<div>${l}</div>`).join('');
 
-export function render(state, handlers) {
-  if (state.phase === 'title') renderTitle(state);
-  else if (state.phase === 'won' || state.phase === 'lost') {
-    renderTable(state, handlers.onPlayCard, handlers.onEndTurn);
-    renderEnd(state, handlers.onAgain);
-  } else renderTable(state, handlers.onPlayCard, handlers.onEndTurn);
+  $('title-overlay').classList.toggle('hidden', state.phase !== 'title');
+  $('win-overlay').classList.toggle('hidden', state.phase !== 'win');
+  $('loss-overlay').classList.toggle('hidden', state.phase !== 'loss');
 }

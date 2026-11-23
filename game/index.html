@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ember Duel — a card battler</title>
+<link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+<div id="app">
+  <div id="title-screen">
+    <div class="title-glyphs">▲&nbsp;◆&nbsp;★&nbsp;●</div>
+    <h1>EMBER DUEL</h1>
+    <p class="tagline">A card battler against Cinder, keeper of the last flame.</p>
+    <div class="howto">
+      <p><b>How to play:</b> each turn you gain energy and draw a card. Click a card to play it — its cost comes out of your energy. Reduce Cinder to <b>0 life</b> to win. Shield absorbs damage first.</p>
+      <p class="howto-cards">▲ Ember burns &nbsp;·&nbsp; ◆ Frost guards &nbsp;·&nbsp; ★ Spark draws &nbsp;·&nbsp; ● Bloom heals</p>
+    </div>
+    <button id="play-button">▶&nbsp; PLAY</button>
+    <p class="keys">Click a card to play it &nbsp;·&nbsp; keys 1–7 play &nbsp;·&nbsp; Enter ends the turn &nbsp;·&nbsp; R restarts</p>
+  </div>
+
+  <div id="table" class="hidden">
+    <div class="side side-ai">
+      <div class="side-info">
+        <span class="side-name">CINDER</span>
+        <span id="ai-life" class="life"></span>
+        <span id="ai-shield" class="shield"></span>
+        <span id="ai-energy" class="energy"></span>
+        <span id="ai-deck" class="deck-count"></span>
+      </div>
+      <div id="ai-hand" class="hand hand-ai"></div>
+    </div>
+
+    <div id="center">
+      <div id="turn-label"></div>
+      <div id="log"></div>
+      <button id="end-turn">END TURN ⏎</button>
+    </div>
+
+    <div class="side side-player">
+      <div class="side-info">
+        <span class="side-name">YOU</span>
+        <span id="player-life" class="life"></span>
+        <span id="player-shield" class="shield"></span>
+        <span id="player-energy" class="energy"></span>
+        <span id="player-deck" class="deck-count"></span>
+      </div>
+      <div id="player-hand" class="hand hand-player"></div>
+    </div>
+  </div>
+
+  <div id="end-screen" class="hidden">
+    <div class="end-panel">
+      <h2 id="end-title"></h2>
+      <p id="end-detail"></p>
+      <button id="play-again">PLAY AGAIN (R)</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
